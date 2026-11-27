@@ -1,0 +1,70 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { BadgeCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Expand, GraduationCap, MapPin, MessageCircle, PawPrint, Share2, ShieldCheck, Sofa, Star, Wifi } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Avatar, EmptyState, FavoriteButton, ListingCard, Modal, Photo, Verified } from '../components';
+import { isRental, money, priceSuffix, rentalPeriods, total } from '../data';
+import { RentalRequest } from '../RentalRequest';
+import { useStore } from '../store';
+
+export function Details() {
+  const { id } = useParams();
+  const { listings, user, startConversation, sendMessage, notify } = useStore();
+  const listing = listings.find(l => l.id === id);
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const [modal, setModal] = useState('');
+  const [photo, setPhoto] = useState(0);
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('14:00');
+  const [offer, setOffer] = useState('');
+  const [message, setMessage] = useState('');
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { setPhoto(0); setModal(''); }, [id]);
+  useEffect(() => { if (user.verified && params.get('acao')) { setModal(params.get('acao')!); setParams({}, { replace: true }); } }, [params, user.verified, setParams]);
+  if (!listing) return <div className="page-container"><EmptyState title="Esse anúncio não foi encontrado" description="Ele pode ter sido removido. Temos outros lugares e achados esperando por você."><Link to="/" className="button primary">Explorar anúncios</Link></EmptyState></div>;
+  const home = listing.kind === 'housing';
+  const renting = isRental(listing);
+  const available = listing.status === 'Disponível';
+  function act(action: string) {
+    if (!listing) return;
+    if (!user.verified) { navigate(`/verificar?next=${encodeURIComponent(`/anuncio/${listing.id}?acao=${action}`)}`); return; }
+    if (action === 'chat') { startConversation(listing.id); navigate(`/mensagens?anuncio=${listing.id}`); } else setModal(action);
+  }
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!listing) return;
+    startConversation(listing.id);
+    const text = modal === 'visita' ? `Olá! Gostaria de agendar uma visita para ${new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR')} às ${time}. ${message}` : `Olá! Tenho interesse e gostaria de fazer uma proposta de ${money(Number(offer))}. ${message}`;
+    sendMessage(listing.id, text);
+    notify(modal === 'visita' ? 'Solicitação de visita adicionada à conversa simulada.' : 'Proposta adicionada à conversa simulada.');
+    navigate(`/mensagens?anuncio=${listing.id}`);
+  }
+  const related = listings.filter(l => l.kind === listing.kind && l.id !== listing.id && l.status === 'Disponível').slice(0, 4);
+  const today = new Date(); const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return <div className="page-container details-page">
+    <Link className="back-link" to={home ? '/' : '/desapego'}><ChevronLeft size={17} />Voltar para {home ? 'moradias' : 'o Desapego'}</Link>
+    <div className="detail-title-block"><div className="detail-kicker"><span><MapPin size={15} />{listing.neighborhood}, {listing.city}</span><Verified university={listing.university} label={`Comunidade ${listing.university}`} /></div><div className="detail-title-row"><h1>{listing.title}</h1><div className="detail-actions"><button className="button secondary" onClick={() => { setCopied(false); setModal('share'); }}><Share2 size={16} />Compartilhar</button><FavoriteButton id={listing.id} withLabel /></div></div></div>
+    <div className={`photo-gallery ${listing.images.length === 1 ? 'single-photo' : ''}`}><button className="main-photo" onClick={() => { setPhoto(0); setModal('photos'); }} aria-label="Ampliar foto principal"><Photo src={listing.images[0]} alt={listing.title} /><span className="gallery-label"><Expand size={15} />Ver {listing.images.length} {listing.images.length === 1 ? 'foto' : 'fotos'}</span></button>{listing.images.length > 1 && <div className="side-photos">{listing.images.slice(1, 3).map((src, i) => <button key={src} onClick={() => { setPhoto(i + 1); setModal('photos'); }} aria-label={`Ampliar foto ${i + 2}`}><Photo src={src} alt={`${listing.title}, foto ${i + 2}`} /></button>)}</div>}</div>
+    <div className="photo-caption"><BadgeCheck size={14} />Fotos ilustrativas da demonstração<span>·</span>{listing.distance} m do campus {listing.university}</div>
+    <div className="detail-layout"><div className="detail-description">
+      <section className="host-block"><Avatar initials={listing.initials} large /><div><h2>Anunciado por {listing.owner.split(' ')[0]}</h2><p>{listing.course} · {listing.university}</p><div className="host-meta"><BadgeCheck size={14} /><span>Estudante da comunidade</span><span>·</span><Star size={13} fill="currentColor" />{listing.rating}</div></div></section>
+      {home && <div className="amenities-summary"><div><Sofa size={23} /><span><b>{listing.tags.includes('Mobiliado') ? 'Quarto mobiliado' : 'Seu espaço, do seu jeito'}</b><small>{listing.tags.includes('Mobiliado') ? 'Pronto para a sua mudança' : 'Monte com a sua personalidade'}</small></span></div><div><Wifi size={23} /><span><b>Wi-Fi incluso</b><small>Fibra para estudar sem travar</small></span></div><div><ShieldCheck size={23} /><span><b>{listing.tags.includes('Sem fiador') ? 'Sem fiador' : 'Conversa direta'}</b><small>Combine com os moradores</small></span></div></div>}
+      {!home && <div className="tag-options detail-tags"><span className="chip"><Check size={14} />{listing.condition}</span>{listing.tags.map(t => <span className="chip" key={t}>{t}</span>)}</div>}
+      <section className="description-section"><h2>{home ? 'Sobre a vaga e a vida por aqui' : 'Sobre esse achado'}</h2><p>{listing.description}</p></section>
+      {home && <><section className="description-section"><h2>O que você encontra por aqui</h2><div className="amenity-grid">{['Cozinha equipada', 'Internet fibra', 'Lavanderia compartilhada', 'Espaço de estudos', ...listing.tags].map((t, i) => <span key={t}>{i === 0 ? <Sofa size={18} /> : t.includes('pets') ? <PawPrint size={18} /> : <Check size={18} />}{t}</span>)}</div></section><section className="description-section"><h2>Boa convivência começa na conversa</h2><p>Combinamos as visitas no grupo, dividimos as tarefas da casa e respeitamos o horário de estudos. Converse com os moradores para conhecer os combinados e ver se vocês dão match.</p><div className="residents"><Avatar initials={listing.initials} /><Avatar initials="TH" /><Avatar initials="AN" /><span>Gente que também vive a universidade.</span></div></section></>}
+      <section className="location-section"><div><MapPin size={23} /><h2>{home ? 'Pertinho da sua rotina' : 'Combine uma retirada segura'}</h2></div><p>{listing.neighborhood}, {listing.city} · {listing.distance} m da {listing.university}</p><div className="campus-distance"><GraduationCap size={24} /><span><b>Campus {listing.university}</b><small>Aproximadamente {Math.max(1, Math.round(listing.distance / 80))} min caminhando</small></span><span className="distance-pill">{listing.distance} m</span></div><small>O endereço exato é combinado diretamente pelo chat.</small></section>
+    </div><aside className="contact-card"><div className="contact-price"><strong>{money(total(listing))}</strong><span>{home || renting ? priceSuffix(listing) : 'pelo item'}</span></div><div className="contact-price-note">{home ? 'Valor total, com as contas incluídas' : renting ? `Aluguel de item · ${rentalPeriods[listing.rentalPeriod || 'day'].name}` : listing.tags.includes('Aceita proposta') ? 'Aberto a propostas. Vamos conversar?' : 'Negocie diretamente com o estudante'}</div><span className={`status-pill ${!available ? 'reserved' : ''}`}><span />{available ? home ? 'Disponível para morar' : renting ? 'Disponível para alugar' : 'Disponível para desapegar' : listing.status}</span>
+      {home ? <div className="cost-breakdown"><h3>CUSTOS MENSAIS, SEM SURPRESAS</h3><div><span>Aluguel</span><b>{money(listing.price)}</b></div><div><span>Condomínio e contas</span><b>{money(listing.bills)}</b></div><div className="cost-total"><span>Total por mês</span><strong>{money(total(listing))}</strong></div></div> : <div className="product-logistics"><MapPin size={18} /><span><b>Retirada em {listing.neighborhood}</b><small>{renting ? 'Combine retirada e devolução pelo chat' : 'Combine o local e horário pelo chat'}</small></span></div>}
+      {listing.mine ? <Link className="button primary full" to={`/anunciar/${listing.id}`}>Editar meu anúncio</Link> : <><button className="button primary full" disabled={!available} onClick={() => act('chat')}><MessageCircle size={18} />{home ? 'Tenho interesse' : renting ? 'Conversar com o anunciante' : 'Conversar com o vendedor'}</button><button className="button secondary full" disabled={!available} onClick={() => act(home ? 'visita' : renting ? 'aluguel' : 'proposta')}>{home || renting ? <CalendarDays size={17} /> : <WalletIcon />}{home ? 'Agendar uma visita' : renting ? 'Solicitar aluguel' : 'Fazer uma proposta'}</button></>}
+      <p className="contact-help"><ShieldCheck size={15} />{home ? 'Conheça a casa e os moradores antes de decidir. Você não será cobrado agora.' : 'Veja o item pessoalmente e combine a retirada antes de pagar.'}</p><div className="response-time"><Clock3 size={14} />Respostas simuladas em poucos segundos</div>
+    </aside></div>
+    <div className="safety-banner"><ShieldCheck size={24} /><div><b>Uma comunidade mais segura começa com você.</b><p>{home ? 'Visite o imóvel, conheça os moradores e confira os combinados antes de fazer qualquer pagamento.' : 'Prefira encontros dentro do campus. Confira o item antes de fazer qualquer pagamento.'}</p></div></div>
+    {related.length > 0 && <section className="related-section"><div className="results-heading"><div><span className="section-kicker">CONTINUE EXPLORANDO</span><h2>{home ? 'Outros lugares, novas possibilidades' : 'Mais achados para o seu próximo capítulo'}</h2></div><Link to={home ? '/' : '/desapego'} className="text-button">Ver todos</Link></div><div className="listing-grid">{related.map(l => <ListingCard key={l.id} listing={l} />)}</div></section>}
+    {modal === 'aluguel' && renting && <RentalRequest listing={listing} onClose={() => setModal('')} />}
+    {modal === 'photos' && <Modal title={`Fotos do anúncio · ${photo + 1} de ${listing.images.length}`} wide onClose={() => setModal('')}><div className="gallery-view"><Photo src={listing.images[photo]} alt={`${listing.title}, foto ${photo + 1}`} />{listing.images.length > 1 && <><button className="icon-button gallery-prev" aria-label="Foto anterior" onClick={() => setPhoto(p => (p - 1 + listing.images.length) % listing.images.length)}><ChevronLeft /></button><button className="icon-button gallery-next" aria-label="Próxima foto" onClick={() => setPhoto(p => (p + 1) % listing.images.length)}><ChevronRight /></button></>}</div><div className="gallery-thumbs">{listing.images.map((src, i) => <button key={src} aria-label={`Mostrar foto ${i + 1}`} aria-pressed={photo === i} className={photo === i ? 'selected' : ''} onClick={() => setPhoto(i)}><Photo src={src} alt={`Miniatura ${i + 1}`} /></button>)}</div></Modal>}
+    {modal === 'share' && <Modal title="Compartilhe esse achado" onClose={() => setModal('')}><div className="modal-content form-stack"><p>A próxima república de alguém pode começar com esse link.</p><label className="field">Link do anúncio<input readOnly value={`${window.location.origin}/anuncio/${listing.id}`} onFocus={e => e.target.select()} /></label><button className="button primary" onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/anuncio/${listing.id}`); setCopied(true); } catch { notify('Selecione o link acima e copie para compartilhar.'); } }}>{copied ? <><Check size={17} />Link copiado</> : <><Share2 size={17} />Copiar link</>}</button><small className="muted">Anúncios criados na demo ficam salvos somente neste navegador.</small></div></Modal>}
+    {(modal === 'visita' || modal === 'proposta') && <Modal title={modal === 'visita' ? 'Vamos conhecer a casa?' : 'Faça sua proposta'} onClose={() => setModal('')}><form className="modal-content form-stack" onSubmit={submit}><p>Combine com {listing.owner.split(' ')[0]} pelo chat. Esta é uma interação simulada da demonstração.</p>{modal === 'visita' ? <div className="form-grid"><label className="field">Dia da visita<input required type="date" min={todayString} value={date} onChange={e => setDate(e.target.value)} /></label><label className="field">Horário<select value={time} onChange={e => setTime(e.target.value)}>{['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map(t => <option key={t}>{t}</option>)}</select></label></div> : <label className="field">Sua oferta (R$)<input required type="number" min="1" max="1000000" step="1" placeholder={String(listing.price)} value={offer} onChange={e => setOffer(e.target.value)} /></label>}<label className="field">Mensagem (opcional)<textarea maxLength={1000} rows={3} placeholder="Se apresente e conte um pouco sobre você..." value={message} onChange={e => setMessage(e.target.value)} /></label><button className="button primary" type="submit">{modal === 'visita' ? 'Solicitar visita no chat' : 'Enviar proposta no chat'}</button></form></Modal>}
+    {modal === 'chat' && <Modal title="Tudo pronto para conversar" onClose={() => setModal('')}><div className="modal-content"><p>Seu vínculo foi confirmado. Comece a conversa com {listing.owner.split(' ')[0]}.</p><button className="button primary" onClick={() => act('chat')}><MessageCircle size={18} />Abrir conversa</button></div></Modal>}
+  </div>;
+}
+function WalletIcon() { return <span aria-hidden="true">R$</span>; }
